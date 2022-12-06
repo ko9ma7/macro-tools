@@ -80,9 +80,7 @@ namespace Macroc
 
         private void Error(string message)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(message);
-            Console.ForegroundColor = ConsoleColor.White;
+            Logger.Error(message);
             IsValid = false;
         }
 
@@ -99,7 +97,7 @@ namespace Macroc
                 if (!allowEOF)
                 {
                     Error("Unexpected end of file");
-                    Environment.Exit(-2);
+                    Environment.Exit((int)ExitCode.ParserError);
                 }
                 Current = new EOSToken(0);
                 return;
@@ -394,7 +392,7 @@ namespace Macroc
                 switch (Current.Type)
                 {
                     case TokenType.EOS:
-                        if (!IsValid) Environment.Exit(-4);
+                        if (!IsValid) Environment.Exit((int)ExitCode.ParserError);
                         return bytes;
 
                     case TokenType.Ident:

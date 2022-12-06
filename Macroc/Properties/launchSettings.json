@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Macroc": {
+      "commandName": "Project",
+      "commandLineArgs": "test.mcs -o macro.mcc"
+    }
+  }
+}
