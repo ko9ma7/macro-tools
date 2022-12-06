@@ -1,4 +1,2 @@
 ﻿int x
-x <- 5
-move x 17
-type "test type"
+x <- 1 + 5

@@ -115,7 +115,7 @@ namespace Macroc
                             while (Current != '"')
                             {
                                 chunk += Current;
-                                Next();
+                                Next(true);
                             }
                             toks.Add(new StringToken(chunk, Line));
                             break;
@@ -124,7 +124,7 @@ namespace Macroc
                         while (char.IsLetterOrDigit(Current) || Current == '.' || Current == '_')
                         {
                             chunk += Current;
-                            Next();
+                            Next(true);
                         }
 
                         Back();
