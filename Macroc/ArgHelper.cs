@@ -24,9 +24,6 @@ namespace Macroc
             {
                 switch (args[i])
                 {
-                    case "-v":
-                        Logger.IsVerbose = true;
-                        break;
                     case "-o":
                         if (i + 1 >= l)
                         {

@@ -44,7 +44,7 @@ namespace Macroc
             }
         }
 
-        private List<Token> Toks;
+        private readonly List<Token> Toks;
         private Token Current;
         private int CurPos;
         private bool IsValid;
@@ -60,10 +60,10 @@ namespace Macroc
             }
         }
         private bool InFunction;
-        private Dictionary<string, VarEntry> StackVarTable;
-        private Dictionary<string, VarEntry> GlobalVarTable;
+        private readonly Dictionary<string, VarEntry> StackVarTable;
+        private readonly Dictionary<string, VarEntry> GlobalVarTable;
         private Dictionary<string, VarEntry> VarTable { get => InFunction ? StackVarTable : GlobalVarTable; }
-        private Dictionary<string, int> FuncTable;
+        private readonly Dictionary<string, int> FuncTable;
         public Parser(List<Token> toks)
         {
             Toks = toks;
@@ -169,7 +169,7 @@ namespace Macroc
         // <summary>
         //  Checks if a token is a float, int, or ident
         // </summary>
-        private bool IsNumType(Token token)
+        private static bool IsNumType(Token token)
         {
             return token.Type == TokenType.Int || token.Type == TokenType.Int || token.Type == TokenType.Ident;
         }
@@ -317,7 +317,7 @@ namespace Macroc
                     IdentToken identTok = (IdentToken)Current;
 
                     bytes.Add(Opcode.StartFunc.Value());
-                    FuncTable.Add(identTok.Ident, bytes.Count());
+                    FuncTable.Add(identTok.Ident, bytes.Count);
 
                     // Setup stack frame
                     StackOffset = 0;

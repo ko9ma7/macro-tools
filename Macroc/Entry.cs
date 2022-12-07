@@ -10,10 +10,9 @@ namespace Macroc
             var argData = ArgHelper.ParseArgs(args);
 
             var stopwatch = Stopwatch.StartNew();
-            Logger.Log("Reading input file...");
 
             string data = "";
-            using (TextReader tr = new StreamReader(args[0]))
+            using (TextReader tr = new StreamReader(argData.SourceFile))
             {
                 data = tr.ReadToEnd();
             }
@@ -26,8 +25,7 @@ namespace Macroc
             Parser parser = new(toks);
             var bytecode = parser.Parse();
 
-            Logger.Verbose("Writing result...");
-            using (BinaryWriter bw = new BinaryWriter(File.OpenWrite(Path.GetFileNameWithoutExtension(args[0]) + ".mcc"), System.Text.Encoding.UTF8, false))
+            using (BinaryWriter bw = new(File.OpenWrite(argData.TargetFile), System.Text.Encoding.UTF8, false))
             {
                 bw.Write(bytecode.ToArray());
             }

@@ -76,6 +76,88 @@ namespace Macroc
             }
         }
 
+        private List<Token> LexWord()
+        {
+            List<Token> toks = new();
+
+            if (!char.IsLetterOrDigit(Current) && Current != '"')
+            {
+                Error($"Error: unknown symbol {Current} (Line {Line + 1})");
+                return toks;
+            }
+            
+            // If there is a quote, lex and push string
+            string chunk = "";
+            if (Current == '"')
+            {
+                Next();
+                while (Current != '"')
+                {
+                    chunk += Current;
+                    Next(true);
+                }
+                toks.Add(new StringToken(chunk, Line));
+                return toks;
+            }
+            
+            // Get letters/numbers until space
+            while (char.IsLetterOrDigit(Current) || Current == '.' || Current == '_')
+            {
+                chunk += Current;
+                Next(true);
+            }
+
+            Back();
+            
+            // Check if it is an int or float
+            if (int.TryParse(chunk, out int ival))
+            {
+                toks.Add(new IntToken(ival, Line));
+                return toks;
+            }
+
+            if (float.TryParse(chunk, out float fval))
+            {
+                toks.Add(new FloatToken(fval, Line));
+                return toks;
+            }
+
+            switch (chunk)
+            {
+                case "move":
+                    toks.Add(new BuiltinToken(Builtin.Move, Line));
+                    break;
+                case "drag":
+                    toks.Add(new BuiltinToken(Builtin.Drag, Line));
+                    break;
+                case "click":
+                    toks.Add(new BuiltinToken(Builtin.Click, Line));
+                    break;
+                case "type":
+                    toks.Add(new BuiltinToken(Builtin.Type, Line));
+                    break;
+                case "mod":
+                    toks.Add(new BuiltinToken(Builtin.Mod, Line));
+                    break;
+                case "start":
+                    toks.Add(new BuiltinToken(Builtin.Start, Line));
+                    break;
+                case "end":
+                    toks.Add(new BuiltinToken(Builtin.End, Line));
+                    break;
+                case "int":
+                    toks.Add(new BuiltinToken(Builtin.Int, Line));
+                    break;
+                case "float":
+                    toks.Add(new BuiltinToken(Builtin.Float, Line));
+                    break;
+                default:
+                    toks.Add(new IdentToken(chunk, Line));
+                    break;
+            }
+            return toks;
+        }
+
         public List<Token> Lex()
         {
             List<Token> toks = new();
@@ -87,124 +169,30 @@ namespace Macroc
                 {
                     case '\0':
                         if (!IsValid) Environment.Exit((int)ExitCode.LexerError);
-                        Logger.Verbose("Found end of stream");
-                        Logger.Verbose("Lexing complete");
-                        Logger.Empty();
                         toks.Add(new EOSToken(Line));
                         return toks;
                     case '+':
-                        Logger.Verbose("Found +");
                         toks.Add(new OperatorToken(OperatorType.Add, Line));
                         break;
                     case '-':
-                        Logger.Verbose("Found -");
                         toks.Add(new OperatorToken(OperatorType.Subtract, Line));
                         break;
                     case '*':
-                        Logger.Verbose("Found *");
                         toks.Add(new OperatorToken(OperatorType.Multiply, Line));
                         break;
                     case '/':
-                        Logger.Verbose("Found /");
                         toks.Add(new OperatorToken(OperatorType.Divide, Line));
                         break;
                     case '<':
                         if (Peek() == '-')
                         {
-                            Logger.Verbose("Found <-");
                             toks.Add(new OperatorToken(OperatorType.Assign, Line));
                             Next();
                         }
                         break;
                     default:
-                    {
-                        if (!char.IsLetterOrDigit(Current) && Current != '"')
-                        {
-                            Error($"Error: unknown symbol {Current} (Line {Line + 1})");
-                        }
-
-                        string chunk = "";
-                        if (Current == '"')
-                        {
-                            Next();
-                            while (Current != '"')
-                            {
-                                chunk += Current;
-                                Next(true);
-                            }
-                                Logger.Verbose($"Found string literal '{chunk}'");
-                            toks.Add(new StringToken(chunk, Line));
-                            break;
-                        }
-
-                        while (char.IsLetterOrDigit(Current) || Current == '.' || Current == '_')
-                        {
-                            chunk += Current;
-                            Next(true);
-                        }
-
-                        Back();
-
-                        if (int.TryParse(chunk, out int ival))
-                        {
-                            Logger.Verbose($"Found integer literal '{ival}'");
-                            toks.Add(new IntToken(ival, Line));
-                            break;
-                        }
-
-                        if (float.TryParse(chunk, out float fval))
-                        {
-                            Logger.Verbose($"Found float literal '{fval}'");
-                            toks.Add(new FloatToken(fval, Line));
-                            break;
-                        }
-
-                        switch (chunk)
-                        {
-                            case "move":
-                                Logger.Verbose("Found builtin 'move'");
-                                toks.Add(new BuiltinToken(Builtin.Move, Line));
-                                break;
-                            case "drag":
-                                Logger.Verbose("Found builtin 'drag'");
-                                toks.Add(new BuiltinToken(Builtin.Drag, Line));
-                                break;
-                            case "click":
-                                Logger.Verbose("Found builtin 'drag'");
-                                toks.Add(new BuiltinToken(Builtin.Click, Line));
-                                break;
-                            case "type":
-                                Logger.Verbose("Found builtin 'type'");
-                                toks.Add(new BuiltinToken(Builtin.Type, Line));
-                                break;
-                            case "mod":
-                                Logger.Verbose("Found builtin 'mod'");
-                                toks.Add(new BuiltinToken(Builtin.Mod, Line));
-                                break;
-                            case "start":
-                                Logger.Verbose("Found builtin 'start'");
-                                toks.Add(new BuiltinToken(Builtin.Start, Line));
-                                break;
-                            case "end":
-                                Logger.Verbose("Found builtin 'end'");
-                                toks.Add(new BuiltinToken(Builtin.End, Line));
-                                break;
-                            case "int":
-                                Logger.Verbose("Found builtin 'int'");
-                                toks.Add(new BuiltinToken(Builtin.Int, Line));
-                                break;
-                            case "float":
-                                Logger.Verbose("Found builtin 'float'");
-                                toks.Add(new BuiltinToken(Builtin.Float, Line));
-                                break;
-                            default:
-                                Logger.Verbose($"Found ident '{chunk}'");
-                                toks.Add(new IdentToken(chunk, Line));
-                                break;
-                        }
-
+                        toks.AddRange(LexWord());
                         break;
-                    }
                 }
 
                 Next(true);
