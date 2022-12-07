@@ -14,6 +14,7 @@
             }
 
             Runtime runtime = new Runtime(ref program, 1000 * 1000);
+            runtime.Run();
         }
     }
 }
