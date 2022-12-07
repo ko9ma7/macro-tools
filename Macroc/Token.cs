@@ -9,6 +9,7 @@ namespace Macroc
         Int,
         Float,
         EOS,
+        ENDL,
     }
 
     enum OperatorType
@@ -17,7 +18,9 @@ namespace Macroc
         Subtract,
         Multiply,
         Divide,
-        Assign
+        Assign,
+        LeftParen,
+        RightParen,
     }
 
     enum Builtin
@@ -101,5 +104,10 @@ namespace Macroc
     internal sealed class EOSToken : Token
     {
         public EOSToken(int line) : base(TokenType.EOS, line) {}
+    }
+
+    internal sealed class ENDLToken :Token
+    {
+        public ENDLToken(int line) : base(TokenType.ENDL, line) {}
     }
 }

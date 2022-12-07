@@ -2,7 +2,7 @@ namespace Macroc
 {
     internal sealed class Lexer
     {
-        private string Data;
+        private readonly string Data;
         private int CurPos;
         private char Current;
         private int Line;
@@ -61,9 +61,6 @@ namespace Macroc
             {
                 switch (Current)
                 {
-                    case '\n':
-                        Line++;
-                        break;
                     case '\r':
                     case '\t':
                     case ' ':
@@ -171,6 +168,10 @@ namespace Macroc
                         if (!IsValid) Environment.Exit((int)ExitCode.LexerError);
                         toks.Add(new EOSToken(Line));
                         return toks;
+                    case '\n':
+                        toks.Add(new ENDLToken(Line));
+                        Line++;
+                        break;
                     case '+':
                         toks.Add(new OperatorToken(OperatorType.Add, Line));
                         break;
@@ -182,6 +183,12 @@ namespace Macroc
                         break;
                     case '/':
                         toks.Add(new OperatorToken(OperatorType.Divide, Line));
+                        break;
+                    case '(':
+                        toks.Add(new OperatorToken(OperatorType.LeftParen, Line));
+                        break;
+                    case ')':
+                        toks.Add(new OperatorToken(OperatorType.RightParen, Line));
                         break;
                     case '<':
                         if (Peek() == '-')

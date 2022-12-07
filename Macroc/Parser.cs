@@ -1,23 +1,26 @@
+using System.ComponentModel;
+
 namespace Macroc
 {
     internal sealed class Parser
     {
         public enum Opcode
         {
-            LDVar = (byte)0x00,
+            LDVar = 0x00,
             LDImm,
-            Ldstring,
+            PushVar,
+            PushImm,
             StoreVar,
             FloatOperation,
             IntOperation,
             Call,
             StartFunc,
             EndFunc,
-            Add = (byte)0x10,
+            Add = 0x10,
             Sub,
             Mult,
             Div,
-            SetupFrame = (byte)0x20,
+            SetupFrame = 0x20,
             FreeFrame,
         }
 
@@ -105,42 +108,31 @@ namespace Macroc
             Current = Toks[CurPos];
         }
 
-        private VarType DataTypeFromTok(Token tok)
-        {
-            switch (tok.Type)
-            {
-                case TokenType.Int:
-                return VarType.Int;
-
-                case TokenType.Float:
-                return VarType.Float;
-
-                case TokenType.Ident:
-                if (!AssertVarExists((IdentToken)tok))
-                    return VarType.Int;
-
-                return VarTable[((IdentToken)tok).Ident].Type;
-
-                default:
-                Error($"Error: Cannot get type of typeless token (Line {tok.Line + 1})");
-                return VarType.Int;
-            }
-        }
-
         private bool AssertVarExists(IdentToken tok)
         {
-            if (!VarTable.ContainsKey(((IdentToken)tok).Ident))
+            if (!VarTable.ContainsKey((tok).Ident))
             {
-                Error($"Error: Undeclared name {((IdentToken)tok).Ident} (Line {tok.Line + 1})");
+                Error($"Undeclared name {(tok).Ident} (Line {tok.Line + 1})");
                 return false;
             }
 
             return true;
         }
 
-        // <summary>
-        // Convert operator type to its matching opcode
-        // </summary>
+        private bool AssertVarExists(string ident)
+        {
+            if (!VarTable.ContainsKey(ident))
+            {
+                Error($"Undeclared name '{ident}' (Line {Current.Line + 1})");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Convert operator type to its matching opcode
+        /// </summary>
         private byte GetOperatorOpcode(OperatorType op)
         {
             switch (op)
@@ -158,7 +150,7 @@ namespace Macroc
                 return Opcode.Div.Value();
 
                 case OperatorType.Assign:
-                Error($"Error: Generic assign has no opcode");
+                Error($"Generic assign is not valid (Line {Current.Line + 1})");
                 return 0xFF;
 
                 default:
@@ -166,54 +158,207 @@ namespace Macroc
             }
         }
 
-        // <summary>
-        //  Checks if a token is a float, int, or ident
-        // </summary>
-        private static bool IsNumType(Token token)
+        private static int GetOperatorPrecedence(OperatorType op) =>
+            op switch
+            {
+                OperatorType.LeftParen => 5,
+                OperatorType.Multiply or OperatorType.Divide => 3,
+                OperatorType.Add or OperatorType.Subtract => 2,
+                _ => 0
+            };
+
+        private List<byte> ParseExprIntLit(VarType type, ref bool expectOperator)
         {
-            return token.Type == TokenType.Int || token.Type == TokenType.Int || token.Type == TokenType.Ident;
+            List<byte> bytes = new(5);
+            if (expectOperator)
+            {
+                Error($"Expected operator (Line {Current.Line + 1})");
+                return bytes;
+            }
+
+            bytes.Add(Opcode.PushImm.Value());
+            int value = ((IntToken)Current).Value;
+
+            // if expression is float-typed, push float. otherwise, push int
+            if (type == VarType.Int) bytes.AddRange(BitConverter.GetBytes(value));
+            else bytes.AddRange(BitConverter.GetBytes((float)value));
+
+            expectOperator = true;
+
+            return bytes;
+        }
+        private List<byte> ParseExprFloatLit(VarType type, ref bool expectOperator)
+        {
+            List<byte> bytes = new(5);
+            if (expectOperator)
+            {
+                Error($"Expected operator (Line {Current.Line + 1})");
+                return bytes;
+            }
+
+            bytes.Add(Opcode.PushImm.Value());
+            float value = ((FloatToken)Current).Value;
+
+            // if expression is float-typed, push float. otherwise, push int
+            if (type == VarType.Float) bytes.AddRange(BitConverter.GetBytes(value));
+            else bytes.AddRange(BitConverter.GetBytes((int)value));
+
+            expectOperator = true;
+
+            return bytes;
         }
 
-        // <summary>
-        // Parse a load operation for an arithmetic operation
-        // </summary>
-        private List<byte> ParseOperandLoad(Token operand, Register reg)
+        private List<byte> ParseExprIdent(VarType type, ref bool expectOperator)
+        {
+            List<byte> bytes = new(5);
+            if (expectOperator)
+            {
+                Error($"Expected operator (Line {Current.Line + 1})");
+                return bytes;
+            }
+
+
+            IdentToken identToken = (IdentToken)Current;
+            if (!AssertVarExists(identToken)) return bytes;
+
+            bytes.Add(Opcode.PushVar.Value());
+            bytes.AddRange(BitConverter.GetBytes(VarTable[identToken.Ident].Offset));
+
+            expectOperator = true;
+
+            return bytes;
+        }
+
+        private List<byte> ParseExprOperator(Stack<OperatorType> operatorStack, ref bool expectOperator)
         {
             List<byte> bytes = new();
-
-            switch (operand.Type)
+            OperatorType operation = ((OperatorToken)Current).Operator;
+            // if operator stack is empty, we must push
+            if (operatorStack.Count == 0)
             {
-                case TokenType.Ident:
-                // Ensure variable exists
-                IdentToken token = (IdentToken)operand;
-                if (!AssertVarExists(token))
-                    break;
+                operatorStack.Push(operation);
+                expectOperator = false;
+                return bytes;
+            }
 
-                // Write opcode, register, and offset
-                bytes.Add(Opcode.LDVar.Value());
-                bytes.Add(reg.Value());
-                bytes.AddRange(BitConverter.GetBytes(VarTable[token.Ident].Offset));
-                break;
+            int currentPrec = GetOperatorPrecedence(operation);
+            int prevPrec = GetOperatorPrecedence(operatorStack.Peek());
 
-                case TokenType.Float:
-                case TokenType.Int:
-                // Write opcode and value
-                bytes.Add(Opcode.LDImm.Value());
-                bytes.Add(reg.Value());
-                bytes.AddRange(BitConverter.GetBytes(((IntToken)operand).Value));
-                break;
+            if (operation == OperatorType.LeftParen)
+            {
+                // Left paren must take place of value
+                if (!expectOperator)
+                {
+                    Error($"Expected value, got left parenthesis (Line {Current.Line + 1})");
+                    return bytes;
+                }
 
-                default:
-                Error($"Error: expected number or ident (Line {operand.Line + 1}");
-                break;
+                operatorStack.Push(operation);
+                return bytes;
+            }
+
+            if (operation == OperatorType.RightParen)
+            {
+                // Right paren must take place of operator
+                if (expectOperator)
+                {
+                    Error($"Expected operator, got right parenthesis (Line {Current.Line + 1})");
+                    return bytes;
+                }
+                
+                // loop until we find a left parenthesis
+                while (operatorStack.Peek() != OperatorType.LeftParen)
+                {
+                    OperatorType op = operatorStack.Pop();
+                    bytes.Add(GetOperatorOpcode(op));
+
+                    // if stack is empty, then we haven't found a matching parenthesis
+                    // this indicates unbalanced parentheses
+                    if (operatorStack.Count == 0)
+                    {
+                        Error($"Unbalanced parentheses (Line {Current.Line + 1})");
+                        return bytes;
+                    }
+                }
+                return bytes;
+            }
+
+            expectOperator = false;
+
+            // is precedences are less-than or equal, pop previous and push current
+            if (currentPrec <= prevPrec)
+            {
+                OperatorType op = operatorStack.Pop();
+                bytes.Add(GetOperatorOpcode(op));
+                operatorStack.Push(operation);
+                return bytes;
+            }
+            // if current has greater precedence
+            else
+            {
+                operatorStack.Push(operation);
+                return bytes;
+            }
+        }
+
+
+        private List<byte> ParseExpression(VarType type)
+        {
+            List<byte> bytes = new();
+            Stack<OperatorType> operatorStack = new();
+            bool expectOperator = false;
+
+            Next();
+
+            while (Current.Type != TokenType.ENDL && Current.Type != TokenType.EOS)
+            {
+                if (expectOperator && Current.Type != TokenType.Operator)
+                {
+                    Error($"Expected operator (Line {Current.Line + 1})");
+                    return bytes;
+                }
+
+                switch (Current.Type)
+                {
+                    case TokenType.Int:
+                        bytes.AddRange(ParseExprIntLit(type, ref expectOperator));
+                        break;
+
+                    case TokenType.Float:
+                        bytes.AddRange(ParseExprFloatLit(type, ref expectOperator));
+                        break;
+
+                    case TokenType.Ident:
+                        bytes.AddRange(ParseExprIdent(type, ref expectOperator));
+                        break;
+
+                    case TokenType.Operator:
+                        bytes.AddRange(ParseExprOperator(operatorStack, ref expectOperator));
+                        break;
+
+                    default:
+                        Error($"Invalid term in expression (Line {Current.Line + 1})");
+                        return bytes;
+                }
+
+                Next();
+            }
+
+            if (!expectOperator)
+            {
+                Error($"Expected value after operator (Line {Current.Line + 1})");
+            }
+            while (operatorStack.TryPop(out var op))
+            {
+                bytes.Add(GetOperatorOpcode(op));
             }
 
             return bytes;
         }
 
-        // <summary>
-        // Parse an expression beginning with an ident
-        // <summary>
+        /// <summary>
+        /// Parse an expression beginning with an ident
+        /// <summary>
         private List<byte> ParseIdent()
         {
             List<byte> bytes = new();
@@ -222,61 +367,22 @@ namespace Macroc
                 // Must be an assignment
                 // Store the asignee
                 string assignee = ((IdentToken)Current).Ident;
+                if (!AssertVarExists(assignee)) return bytes;
                 Next();
 
                 // Make sure we are assigning
                 if (((OperatorToken)Current).Operator != OperatorType.Assign)
                 {
-                    Error($"Error: Expected assignment operator (Line {Current.Line + 1}) ");
-                    
+                    Error($"Expected assignment operator (Line {Current.Line + 1}) ");
                     return bytes;
                 }
 
-                // Get expression tokens
-                Next();
-                Token left = Current;
-                Next();
-                Token op = Current;
-                Next();
-                Token right = Current;
+                VarType resultType = VarTable[assignee].Type;
 
-                // Validate token types
-                if (!IsNumType(left))
-                {
-                    Error($"Error: Expected number type (Line {left.Line + 1})");
-                    return bytes;
-                }
-
-                if (!IsNumType(right))
-                {
-                    Error($"Error: Expected number type (Line {left.Line + 1})");
-                    return bytes;
-                }
-
-                if (op.Type != TokenType.Operator)
-                {
-                    Error($"Error: Expected operator (Line {left.Line + 1})");
-                    return bytes;
-                }
-
-                // Make sure left and right types are the same
-                VarType leftType = DataTypeFromTok(left);
-                VarType rightType = DataTypeFromTok(right);
-
-                if (leftType != rightType || leftType != VarTable[assignee].Type)
-                {
-                    Error($"Error: Operand types do not match (Line {op.Line + 1})");
-                    return bytes;
-                }
                 // Write operation type
-                bytes.Add(((leftType == VarType.Int ? Opcode.IntOperation : Opcode.FloatOperation)).Value());
-                
-                // Write load operations
-                bytes.AddRange(ParseOperandLoad(left, Register.R1));
-                bytes.AddRange(ParseOperandLoad(right, Register.R2));
+                bytes.Add(((resultType == VarType.Int ? Opcode.IntOperation : Opcode.FloatOperation)).Value());
 
-                // Write operator
-                bytes.Add(GetOperatorOpcode(((OperatorToken)op).Operator));
+                bytes.AddRange(ParseExpression(resultType));
 
                 // Write store operation
                 bytes.Add(Opcode.StoreVar.Value());
@@ -290,9 +396,10 @@ namespace Macroc
             return bytes;
         }
 
-        // <summary>
-        // Parse an expression beginning with a builtin
-        // </summary>
+        /// <summary>
+        /// Parse a builtin statement
+        /// </summary>
+
         private List<byte> ParseBuiltin()
         {
             List<byte> bytes = new();
@@ -303,15 +410,17 @@ namespace Macroc
                     // Do not allow function definition inside of a function
                     if (InFunction)
                     {
-                        Error($"Error: Cannot define function in function (Line {Current.Line + 1})");
+                        Error($"Cannot define function in function (Line {Current.Line + 1})");
                         break;
                     }
+
                     // Validate token types
                     if (PeekType() != TokenType.Ident)
                     {
-                        Error($"Error: Expected ident (Line {Current.Line + 1}");
+                        Error($"Expected ident (Line {Current.Line + 1}");
                         break;
                     }
+
                     Next();
                     InFunction = true;
                     IdentToken identTok = (IdentToken)Current;
@@ -322,6 +431,7 @@ namespace Macroc
                     // Setup stack frame
                     StackOffset = 0;
                     VarTable.Clear();
+
                     break;
                 }
 
@@ -329,7 +439,7 @@ namespace Macroc
                     // Only allow end at end of function
                     if (!InFunction)
                     {
-                        Error($"Error: 'End' only valid at end of function (Line {Current.Line + 1})");
+                        Error($"'End' only valid at end of function (Line {Current.Line + 1})");
                         break;
                     }
                     InFunction = false;
@@ -343,15 +453,18 @@ namespace Macroc
                     // Validate token types
                     if (PeekType() != TokenType.Ident)
                     {
-                        Error($"Error: Expected ident (Line {Current.Line + 1}");
+                        Error($"Expected ident (Line {Current.Line + 1}");
                         break;
                     }
+
                     Next();
                     IdentToken identTok = (IdentToken)Current;
+
                     // Setup variable entry
                     StackOffset += 4;
                     VarEntry entry = new(VarType.Int, StackOffset);
                     VarTable.Add(identTok.Ident, entry);
+
                     break;
                 }
 
@@ -361,7 +474,7 @@ namespace Macroc
                     // Validate token types
                     if (PeekType() != TokenType.Ident)
                     {
-                        Error($"Error: Expected ident (Line {Current.Line + 1}");
+                        Error($"Expected ident (Line {Current.Line + 1}");
                         break;
                     }
                     Next();
@@ -380,9 +493,9 @@ namespace Macroc
             return bytes;
         }
 
-        // <summary>
-        // Parse the data currently bound to the parser
-        // </summary>
+        /// <summary>
+        /// Parse the data currently bound to the parser
+        ///</summary>
         public List<byte> Parse()
         {
             List<byte> bytes = new();
@@ -403,11 +516,14 @@ namespace Macroc
                         bytes.AddRange(ParseBuiltin());
                         break;
 
+                    case TokenType.ENDL:
+                        break;
+
                     default:
                         break;
                 }
 
-                Next();
+                Next(true);
             }
         }
     }
