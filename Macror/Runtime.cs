@@ -1,10 +1,12 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Macror
 {
     internal sealed class Runtime
     {
-        private byte[] Program;
-        private byte[] Memory;
-        private Stack Stack;
+        private readonly byte[] Program;
+        private readonly byte[] Memory;
+        private readonly Stack Stack;
         private OperationMode Mode;
         private int InstructionPointer;
         private bool Running;
@@ -15,6 +17,21 @@ namespace Macror
             Stack = new(ref Memory);
             InstructionPointer = 0;
             Running = true;
+        }
+
+        private int GetIntFromPrgm()
+        {
+            int address = BitConverter.ToInt32(Program, InstructionPointer);
+            InstructionPointer += 3;
+            return address;
+        }
+
+        private byte[] GetBytesFromPrgm()
+        {
+            byte[] bytes = new byte[4];
+            Array.Copy(Program, InstructionPointer, bytes, 0, 4);
+            InstructionPointer += 3;
+            return bytes;
         }
 
         private void Add()
@@ -89,16 +106,57 @@ namespace Macror
             Stack.Push(bytes);
         }
 
+        private void PushImm()
+        {
+            ++InstructionPointer;
+            Stack.Push(GetBytesFromPrgm());
+        }
+        private void PushVar()
+        {
+            ++InstructionPointer;
+            int address = GetIntFromPrgm();
+            int val = Stack.ReadOffsetInt(address);
+            Stack.Push(val);
+        }
+
         private void StoreVariable()
         {
+            ++InstructionPointer;
+            int address = GetIntFromPrgm();
+            Stack.WriteToOffset(Stack.PopBytes(), address);
+        }
 
+        private void SetupFrame()
+        {
+            ++InstructionPointer;
+            int size = GetIntFromPrgm();
+            Stack.SetupFrame(size);
+        }
+
+        private void Display()
+        {
+            ++InstructionPointer;
+            int address = GetIntFromPrgm();
+            Console.Write($"Offset: {address} | ");
+
+            switch (Mode)
+            {
+                case OperationMode.Int:
+                    Console.WriteLine($"Value: {Stack.ReadOffsetInt(address)}");
+                    break;
+
+                case OperationMode.Float:
+                    Console.WriteLine($"Value: {Stack.ReadOffsetFloat(address)}");
+                    break;
+            }
         }
 
         public void Run()
         {
             while (Running)
             {
-                switch ((Opcode)Memory[InstructionPointer])
+                Opcode opcode = (Opcode)Program[InstructionPointer];
+                switch (opcode)
                 {
                     case Opcode.Halt:
                         Running = false;
@@ -112,13 +170,21 @@ namespace Macror
                         Mode = OperationMode.Float;
                         break;
 
-                    case Opcode.PushImm:
-                    {
-                        byte[] bytes = new byte[4];
-                        Array.Copy(Program, ++InstructionPointer, bytes, 0, 4);
-                        Stack.Push(bytes);
+                    case Opcode.SetupFrame:
+                        SetupFrame();
                         break;
-                    }
+
+                    case Opcode.FreeFrame:
+                        Stack.PopFrame();
+                        break;
+
+                    case Opcode.PushImm:
+                        PushImm();
+                        break;
+
+                    case Opcode.PushVar:
+                        PushVar();
+                        break;
 
                     case Opcode.Add:
                         Add();
@@ -139,8 +205,11 @@ namespace Macror
                     case Opcode.StoreVar:
                         StoreVariable();
                         break;
-                }   
 
+                    case Opcode.Display:
+                        Display();
+                        break;
+                }   
                 InstructionPointer++;
             }
         }
@@ -158,6 +227,7 @@ namespace Macror
             StartFunc,
             EndFunc,
             Halt,
+            Display,
             Add = 0x10,
             Sub,
             Mult,

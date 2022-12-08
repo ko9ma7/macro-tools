@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Macror": {
+      "commandName": "Project",
+      "commandLineArgs": "test.mcc"
+    }
+  }
+}

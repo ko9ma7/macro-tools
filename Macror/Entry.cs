@@ -13,7 +13,7 @@
                 program = br.ReadBytes(l);
             }
 
-            Runtime runtime = new Runtime(ref program, 1000 * 1000);
+            Runtime runtime = new Runtime(ref program, 256);
             runtime.Run();
         }
     }

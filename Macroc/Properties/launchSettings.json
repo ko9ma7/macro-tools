@@ -2,7 +2,7 @@
   "profiles": {
     "Macroc": {
       "commandName": "Project",
-      "commandLineArgs": "test.mcs -o macro.mcc"
+      "commandLineArgs": "test.mcs -o $(SolutionDir)/Macror/test.mcc"
     }
   }
 }

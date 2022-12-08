@@ -1,2 +1,7 @@
 ﻿int x
+float y
 x <- 1 + 5 * 3
+x <- x + 1
+y <- 2.0 / (4 - 1.0)
+display x
+display y

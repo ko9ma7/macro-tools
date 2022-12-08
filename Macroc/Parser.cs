@@ -16,6 +16,8 @@ namespace Macroc
             Call,
             StartFunc,
             EndFunc,
+            Halt,
+            Display,
             Add = 0x10,
             Sub,
             Mult,
@@ -161,7 +163,6 @@ namespace Macroc
         private static int GetOperatorPrecedence(OperatorType op) =>
             op switch
             {
-                OperatorType.LeftParen => 5,
                 OperatorType.Multiply or OperatorType.Divide => 3,
                 OperatorType.Add or OperatorType.Subtract => 2,
                 _ => 0
@@ -247,7 +248,7 @@ namespace Macroc
             if (operation == OperatorType.LeftParen)
             {
                 // Left paren must take place of value
-                if (!expectOperator)
+                if (expectOperator)
                 {
                     Error($"Expected value, got left parenthesis (Line {Current.Line + 1})");
                     return bytes;
@@ -260,7 +261,7 @@ namespace Macroc
             if (operation == OperatorType.RightParen)
             {
                 // Right paren must take place of operator
-                if (expectOperator)
+                if (!expectOperator)
                 {
                     Error($"Expected operator, got right parenthesis (Line {Current.Line + 1})");
                     return bytes;
@@ -280,6 +281,8 @@ namespace Macroc
                         return bytes;
                     }
                 }
+                // pop leftover left parenthesis
+                operatorStack.Pop();
                 return bytes;
             }
 
@@ -486,6 +489,27 @@ namespace Macroc
                     break;
                 }
 
+                case Builtin.Display:
+                {
+                    // Must be a variable next
+                    // Validate token types
+                    if (PeekType() != TokenType.Ident)
+                    {
+                        Error($"Expected ident (Line {Current.Line + 1}");
+                        break;
+                    }
+                    Next();
+                    string ident = ((IdentToken)Current).Ident;
+
+                    if (!AssertVarExists(ident)) return bytes;
+
+                    bytes.Add(VarTable[ident].Type == VarType.Int ? Opcode.IntOperation.Value() : Opcode.FloatOperation.Value());
+                    bytes.Add(Opcode.Display.Value());
+                    bytes.AddRange(BitConverter.GetBytes(VarTable[ident].Offset));
+
+                    break;
+                }
+
                 default:
                 break;
             }
@@ -496,9 +520,10 @@ namespace Macroc
         /// <summary>
         /// Parse the data currently bound to the parser
         ///</summary>
-        public List<byte> Parse()
+        public byte[] Parse()
         {
             List<byte> bytes = new();
+            bytes.AddRange(new List<byte>() {Opcode.SetupFrame.Value(), 0, 0, 0, 0});
 
             while (true)
             {
@@ -506,7 +531,10 @@ namespace Macroc
                 {
                     case TokenType.EOS:
                         if (!IsValid) Environment.Exit((int)ExitCode.ParserError);
-                        return bytes;
+                        bytes.Add(Opcode.Halt.Value());
+                        byte[] bytesArr = bytes.ToArray();
+                        Array.Copy(BitConverter.GetBytes(GlobalStackOffset), 0, bytesArr, 1, 4);
+                        return bytesArr;
 
                     case TokenType.Ident:
                         bytes.AddRange(ParseIdent());

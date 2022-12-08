@@ -148,6 +148,12 @@ namespace Macroc
                 case "float":
                     toks.Add(new BuiltinToken(Builtin.Float, Line));
                     break;
+                case "delay":
+                    toks.Add(new BuiltinToken(Builtin.Delay, Line));
+                    break;
+                case "display":
+                    toks.Add(new BuiltinToken(Builtin.Display, Line));
+                    break;
                 default:
                     toks.Add(new IdentToken(chunk, Line));
                     break;

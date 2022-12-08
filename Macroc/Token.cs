@@ -30,6 +30,8 @@ namespace Macroc
         Click,
         Type,
         Mod,
+        Delay,
+        Display,
         Start = 0x20,
         End,
         Int = 0x40,
