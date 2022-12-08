@@ -18,11 +18,13 @@ namespace Macroc
             EndFunc,
             Halt,
             Display,
-            Add = 0x10,
+            Move,
+            Delay,
+            Add = 0x20,
             Sub,
             Mult,
             Div,
-            SetupFrame = 0x20,
+            SetupFrame = 0x40,
             FreeFrame,
         }
 
@@ -49,6 +51,7 @@ namespace Macroc
             }
         }
 
+        public const int Version = 1;
         private readonly List<Token> Toks;
         private Token Current;
         private int CurPos;
@@ -65,6 +68,7 @@ namespace Macroc
             }
         }
         private bool InFunction;
+        private bool InFunctionCall;
         private readonly Dictionary<string, VarEntry> StackVarTable;
         private readonly Dictionary<string, VarEntry> GlobalVarTable;
         private Dictionary<string, VarEntry> VarTable { get => InFunction ? StackVarTable : GlobalVarTable; }
@@ -81,6 +85,7 @@ namespace Macroc
             StackStackOffset = 0;
             GlobalStackOffset = 0;
             InFunction = false;
+            InFunctionCall = false;
         }
 
         private void Error(string message)
@@ -107,6 +112,12 @@ namespace Macroc
                 Current = new EOSToken(0);
                 return;
             }
+            Current = Toks[CurPos];
+        }
+
+        private void Back()
+        {
+            CurPos--;
             Current = Toks[CurPos];
         }
 
@@ -317,6 +328,11 @@ namespace Macroc
             {
                 if (expectOperator && Current.Type != TokenType.Operator)
                 {
+                    if (InFunctionCall)
+                    {
+                        Back();
+                        break;
+                    }
                     Error($"Expected operator (Line {Current.Line + 1})");
                     return bytes;
                 }
@@ -510,6 +526,29 @@ namespace Macroc
                     break;
                 }
 
+                case Builtin.Move:
+                {
+                    InFunctionCall = true;
+                    bytes.Add(Opcode.IntOperation.Value());
+                    bytes.AddRange(ParseExpression(VarType.Int));
+                    bytes.AddRange(ParseExpression(VarType.Int));
+                    bytes.Add(Opcode.Move.Value());
+                    InFunctionCall = false;
+
+                    break;
+                }
+
+                case Builtin.Delay:
+                {
+                    InFunctionCall = true;
+                    bytes.Add(Opcode.FloatOperation.Value());
+                    bytes.AddRange(ParseExpression(VarType.Float));
+                    bytes.Add(Opcode.Delay.Value());
+                    InFunctionCall = false;
+
+                    break;
+                }
+
                 default:
                 break;
             }
@@ -523,6 +562,7 @@ namespace Macroc
         public byte[] Parse()
         {
             List<byte> bytes = new();
+            bytes.AddRange(BitConverter.GetBytes(Version));
             bytes.AddRange(new List<byte>() {Opcode.SetupFrame.Value(), 0, 0, 0, 0});
 
             while (true)
@@ -533,7 +573,7 @@ namespace Macroc
                         if (!IsValid) Environment.Exit((int)ExitCode.ParserError);
                         bytes.Add(Opcode.Halt.Value());
                         byte[] bytesArr = bytes.ToArray();
-                        Array.Copy(BitConverter.GetBytes(GlobalStackOffset), 0, bytesArr, 1, 4);
+                        Array.Copy(BitConverter.GetBytes(GlobalStackOffset), 0, bytesArr, 5, 4);
                         return bytesArr;
 
                     case TokenType.Ident:
@@ -545,9 +585,11 @@ namespace Macroc
                         break;
 
                     case TokenType.ENDL:
+                        InFunctionCall = false;
                         break;
 
                     default:
+                        Error($"Unexpected symbol (Line {Current.Line + 1})");
                         break;
                 }
 

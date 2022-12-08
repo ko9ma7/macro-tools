@@ -38,6 +38,12 @@ namespace Macroc
                             Logger.Error($"Ignoring unknown switch '{args[i]}'");
                             break;
                         }
+                        if (data.SourceFile != "")
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine("[WARNING] Source file passed in twice...");
+                            Console.BackgroundColor = ConsoleColor.White;
+                        }
                         data.SourceFile = args[i];
                         break;
                 }

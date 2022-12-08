@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // Use IntelliSense to find out which attributes exist for C# debugging
+            // Use hover for the description of the existing attributes
+            // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
+            "name": "Debug Macroc",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "buildc",
+            // If you have changed target frameworks, make sure to update the program path.
+            "program": "${workspaceFolder}/Macroc/bin/Debug/net6.0/Macroc.dll",
+            "args": ["./test.mcs", "-o", "../Macroc/test.mcc"],
+            "cwd": "${workspaceFolder}/Macroc/",
+            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            // Use IntelliSense to find out which attributes exist for C# debugging
+            // Use hover for the description of the existing attributes
+            // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
+            "name": "Debug Macror",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "buildr",
+            // If you have changed target frameworks, make sure to update the program path.
+            "program": "${workspaceFolder}/Macror/bin/Debug/net6.0/Macror.dll",
+            "args": ["./test.mcc", "-v"],
+            "cwd": "${workspaceFolder}/Macroc/",
+            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

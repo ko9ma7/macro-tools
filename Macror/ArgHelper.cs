@@ -17,6 +17,9 @@ namespace Macror
             {
                 switch (args[i])
                 {
+                    case "-v":
+                        Logger.IsVerbose = true;
+                        break;
                     default:
                         if (args[i][0] == '-')
                         {

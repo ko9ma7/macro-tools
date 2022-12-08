@@ -1,5 +1,7 @@
 **/bin/
 **/obj/
 **/.vs/
-**/.vscode/
+**/.vscode/*
 **/*.mcc
+!.vscode/launch.json
+!.vscode/tasks.json

@@ -4,6 +4,7 @@ namespace Macror
 {
     internal sealed class Runtime
     {
+        public const int Version = 1;
         private readonly byte[] Program;
         private readonly byte[] Memory;
         private readonly Stack Stack;
@@ -13,10 +14,27 @@ namespace Macror
         public Runtime(ref byte[] program, int memorySize)
         {
             Program = program;
+            if (Program.Length < 4)
+            {
+                Logger.Error($"Invalid Program...");
+                Environment.Exit((int)ExitCode.RuntimeError);   
+            }
             Memory = new byte[memorySize];
             Stack = new(ref Memory);
             InstructionPointer = 0;
             Running = true;
+
+            int progVersion = BitConverter.ToInt32(Program, 0);
+            if (Version != progVersion)
+            {
+                Logger.Error($"Parser version is {Version} but bytecode version is {progVersion}...");
+                Environment.Exit((int)ExitCode.RuntimeError);   
+            }
+        }
+
+        private string BytesToFriendly(byte[] bytes)
+        {
+            return (Mode == OperationMode.Int ? BitConverter.ToInt32(bytes) : BitConverter.ToSingle(bytes)).ToString();
         }
 
         private int GetIntFromPrgm()
@@ -42,12 +60,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left + right);
+                Logger.Verbose($"Add | {left}+{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left + right);
+                Logger.Verbose($"Add | {left}+{right}");
             }
             Stack.Push(bytes);
         }
@@ -60,12 +80,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left - right);
+                Logger.Verbose($"Subtract | {left}-{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left - right);
+                Logger.Verbose($"Subtract | {left}-{right}");
             }
             Stack.Push(bytes);
         }
@@ -78,12 +100,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left * right);
+                Logger.Verbose($"Multiply | {left}*{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left * right);
+                Logger.Verbose($"Multiply | {left}*{right}");
             }
             Stack.Push(bytes);
         }
@@ -96,12 +120,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left / right);
+                Logger.Verbose($"Divide | {left}/{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left / right);
+                Logger.Verbose($"Divide | {left}/{right}");
             }
             Stack.Push(bytes);
         }
@@ -109,21 +135,26 @@ namespace Macror
         private void PushImm()
         {
             ++InstructionPointer;
-            Stack.Push(GetBytesFromPrgm());
+            byte[] val = GetBytesFromPrgm();
+            Stack.Push(val);
+            Logger.Verbose($"PushImm | Value: {BytesToFriendly(val)}");
         }
         private void PushVar()
         {
             ++InstructionPointer;
             int address = GetIntFromPrgm();
-            int val = Stack.ReadOffsetInt(address);
+            byte[] val = Stack.ReadOffsetBytes(address);
             Stack.Push(val);
+            Logger.Verbose($"PushVar | Value: {BytesToFriendly(val)} | address: {address}");
         }
 
         private void StoreVariable()
         {
             ++InstructionPointer;
             int address = GetIntFromPrgm();
-            Stack.WriteToOffset(Stack.PopBytes(), address);
+            byte[] bytes = Stack.PopBytes();
+            Stack.WriteToOffset(bytes, address);
+            Logger.Verbose($"StoreVar | Value: {BytesToFriendly(bytes)} | address: {address}");
         }
 
         private void SetupFrame()
@@ -131,6 +162,7 @@ namespace Macror
             ++InstructionPointer;
             int size = GetIntFromPrgm();
             Stack.SetupFrame(size);
+            Logger.Verbose($"SetupFrame | size: {size}");
         }
 
         private void Display()
@@ -149,6 +181,21 @@ namespace Macror
                     Console.WriteLine($"Value: {Stack.ReadOffsetFloat(address)}");
                     break;
             }
+        }
+
+        private void Move()
+        {
+            int y = Stack.PopInt();
+            int x = Stack.PopInt();
+            Logger.Verbose($"Move | x: {x} | y: {y}");
+            // Move here
+        }
+
+        private void Delay()
+        {
+            float timeInSeconds = Stack.PopFloat();
+            Logger.Verbose($"Delay | time: {timeInSeconds}");
+            Thread.Sleep((int)(timeInSeconds * 1000));
         }
 
         public void Run()
@@ -209,6 +256,14 @@ namespace Macror
                     case Opcode.Display:
                         Display();
                         break;
+
+                    case Opcode.Move:
+                        Move();
+                        break;
+
+                    case Opcode.Delay:
+                        Delay();
+                        break;
                 }   
                 InstructionPointer++;
             }
@@ -228,11 +283,13 @@ namespace Macror
             EndFunc,
             Halt,
             Display,
-            Add = 0x10,
+            Move,
+            Delay,
+            Add = 0x20,
             Sub,
             Mult,
             Div,
-            SetupFrame = 0x20,
+            SetupFrame = 0x40,
             FreeFrame,
         }
 

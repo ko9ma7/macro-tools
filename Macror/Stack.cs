@@ -91,5 +91,12 @@ namespace Macror
             Array.Copy(Memory, BasePointer - offset, bytes, 0, 4);
             return BitConverter.ToSingle(bytes);
         }
+
+        public byte[] ReadOffsetBytes(int offset)
+        {
+            byte[] bytes = new byte[4];
+            Array.Copy(Memory, BasePointer - offset, bytes, 0, 4);
+            return bytes;
+        }
     }
 }
