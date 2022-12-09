@@ -7,4 +7,4 @@ display x
 display y
 
 move x + 2 3 * 5
-delay (x + 3) * 5 7 * 8
+delay (x + 3) * 5

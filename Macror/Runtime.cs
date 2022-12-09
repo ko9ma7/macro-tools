@@ -21,7 +21,7 @@ namespace Macror
             }
             Memory = new byte[memorySize];
             Stack = new(ref Memory);
-            InstructionPointer = 0;
+            InstructionPointer = 4;         /* Skip the version bytes */
             Running = true;
 
             int progVersion = BitConverter.ToInt32(Program, 0);

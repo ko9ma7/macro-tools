@@ -40,9 +40,8 @@ namespace Macroc
                         }
                         if (data.SourceFile != "")
                         {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine("[WARNING] Source file passed in twice...");
-                            Console.BackgroundColor = ConsoleColor.White;
+                            Logger.Error("[WARNING] Source file passed in twice...");
+                            Environment.Exit((int)ExitCode.ArgError);
                         }
                         data.SourceFile = args[i];
                         break;
