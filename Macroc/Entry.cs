@@ -17,20 +17,24 @@ namespace Macroc
                 data = tr.ReadToEnd();
             }
 
+            stopwatch.Stop();
             Logger.Log("Lexing input...");
+            stopwatch.Start();
             Lexer lexer = new(ref data);
             var toks = lexer.Lex();
 
+            stopwatch.Stop();
             Logger.Log("Parsing input...");
+            stopwatch.Start();
             Parser parser = new(toks);
             var bytecode = parser.Parse();
 
+            stopwatch.Stop();
             using (BinaryWriter bw = new(File.OpenWrite(argData.TargetFile), System.Text.Encoding.UTF8, false))
             {
                 bw.Write(bytecode.ToArray());
             }
 
-            stopwatch.Stop();
 
             Logger.Log($"Done in {stopwatch.ElapsedMilliseconds}ms");
         }
