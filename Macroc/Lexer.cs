@@ -3,6 +3,7 @@ namespace Macroc
     internal sealed class Lexer
     {
         private readonly string Data;
+        private readonly List<Token> toks;
         private int CurPos;
         private char Current;
         private int Line;
@@ -10,6 +11,7 @@ namespace Macroc
         public Lexer(ref string data)
         {
             Data = data;
+            toks = new();
             CurPos = -1;
             Current = (char)0;
             Line = 0;
@@ -73,14 +75,12 @@ namespace Macroc
             }
         }
 
-        private List<Token> LexWord()
+        private void LexWord()
         {
-            List<Token> toks = new();
-
             if (!char.IsLetterOrDigit(Current) && Current != '"')
             {
                 Error($"Error: unknown symbol {Current} (Line {Line + 1})");
-                return toks;
+                return;
             }
             
             // If there is a quote, lex and push string
@@ -94,7 +94,7 @@ namespace Macroc
                     Next(true);
                 }
                 toks.Add(new StringToken(chunk, Line));
-                return toks;
+                return;
             }
             
             // Get letters/numbers until space
@@ -110,13 +110,13 @@ namespace Macroc
             if (int.TryParse(chunk, out int ival))
             {
                 toks.Add(new IntToken(ival, Line));
-                return toks;
+                return;
             }
 
             if (float.TryParse(chunk, out float fval))
             {
                 toks.Add(new FloatToken(fval, Line));
-                return toks;
+                return;
             }
 
             switch (chunk)
@@ -158,13 +158,10 @@ namespace Macroc
                     toks.Add(new IdentToken(chunk, Line));
                     break;
             }
-            return toks;
         }
 
         public List<Token> Lex()
         {
-            List<Token> toks = new();
-
             while (true)
             {
                 SkipWhitespace();
@@ -204,7 +201,7 @@ namespace Macroc
                         }
                         break;
                     default:
-                        toks.AddRange(LexWord());
+                        LexWord();
                         break;
                 }
 

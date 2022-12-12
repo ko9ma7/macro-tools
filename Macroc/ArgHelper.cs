@@ -12,7 +12,9 @@ namespace Macroc
         {
             public string SourceFile { get; set; }
             public string TargetFile { get; set; }
-            public ArgData() { SourceFile = ""; TargetFile = ""; }
+            public bool Debug { get; set; }
+            public bool Benchmark { get; set; }
+            public ArgData() { SourceFile = ""; TargetFile = ""; Debug = false; Benchmark = false; }
         }
 
         public static ArgData ParseArgs(string[] args)
@@ -31,6 +33,12 @@ namespace Macroc
                             Environment.Exit((int)ExitCode.ArgError);
                         }
                         data.TargetFile = args[++i];
+                        break;
+                    case "-d":
+                        data.Debug = true;
+                        break;
+                    case "-b":
+                        data.Benchmark = true;
                         break;
                     default:
                         if (args[i][0] == '-')

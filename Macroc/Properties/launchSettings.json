@@ -1,8 +1,12 @@
 {
   "profiles": {
-    "Macroc": {
+    "Macro Compile | Normal": {
       "commandName": "Project",
-      "commandLineArgs": "test.mcs -o $(SolutionDir)/Macror/test.mcc"
+      "commandLineArgs": "test.mcs -d -o $(SolutionDir)/Macror/test.mcc"
+    },
+    "Macro Compile | Benchmark": {
+      "commandName": "Project",
+      "commandLineArgs": "test.mcs -b"
     }
   }
 }
