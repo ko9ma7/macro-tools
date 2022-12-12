@@ -56,7 +56,7 @@ namespace Macroc
                 }
             }
             
-            if (!File.Exists(data.SourceFile))
+            if (!File.Exists(data.SourceFile) && !data.Benchmark)
             {
                 Logger.Error($"Source file could not be found...");
                 Environment.Exit((int)ExitCode.NoInputFile);
