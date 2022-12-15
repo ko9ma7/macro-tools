@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Macror
 {
     internal sealed class Runtime
