@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Macro Compiler": {
+      "commandName": "Project",
+      "commandLineArgs": "-c test.mcs -v -d"
+    },
+    "Macro Runtime": {
+      "commandName": "Project",
+      "commandLineArgs": "-r test.mcc -v -m 16"
+    }
+  }
+}

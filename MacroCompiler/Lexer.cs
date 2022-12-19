@@ -1,24 +1,41 @@
-namespace Macroc
+using MacroCommon;
+
+namespace MacroCompiler
 {
-    internal sealed class Lexer
+    public sealed class Lexer
     {
-        private readonly string Data;
-        private readonly List<Token> toks;
+        private string Data;
+        private List<Token> toks;
         private int CurPos;
         private char Current;
         private int Line;
         private bool IsValid;
-        public Lexer(ref string data)
+        private bool Ready;
+        
+        /// <summary>
+        /// Constructs a new lexer
+        /// </summary>
+        public Lexer()
         {
-            Data = data;
             toks = new();
             CurPos = -1;
             Current = (char)0;
             Line = 0;
-            Next();
             IsValid = true;
+            Ready = false;
         }
-        public void Error(string message)
+        
+        /// <summary>
+        /// Binds the given data to the lexer.
+        /// </summary>
+        /// <param name="data">The data to bind to.</param>
+        public void BindData(ref string data)
+        {
+            Data = data;
+            Next();
+            Ready = true;
+        }
+        private void Error(string message)
         { 
             Logger.Error(message);
             IsValid = false;
@@ -29,7 +46,7 @@ namespace Macroc
             if (CurPos + 1 >= Data.Length)
             {
                 Error("Unexpected end of file");
-                Environment.Exit((int)ExitCode.LexerError);
+                throw new EndOfStreamException();
             }
             return Data[CurPos + 1];
         }
@@ -48,7 +65,7 @@ namespace Macroc
                 if (!allowEOF)
                 {
                     Error("Unexpected end of file");
-                    Environment.Exit((int)ExitCode.LexerError);
+                    throw new EndOfStreamException();
                 }
                 Current = '\0';
                 return;
@@ -109,50 +126,50 @@ namespace Macroc
             // Check if it is an int or float
             if (int.TryParse(chunk, out int ival))
             {
-                toks.Add(new IntToken(ival, Line));
+                toks.Add(new IntLiteral(ival, Line));
                 return;
             }
 
             if (float.TryParse(chunk, out float fval))
             {
-                toks.Add(new FloatToken(fval, Line));
+                toks.Add(new FloatLiteral(fval, Line));
                 return;
             }
 
             switch (chunk)
             {
                 case "move":
-                    toks.Add(new BuiltinToken(Builtin.Move, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Move, Line));
                     break;
                 case "drag":
-                    toks.Add(new BuiltinToken(Builtin.Drag, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Drag, Line));
                     break;
                 case "click":
-                    toks.Add(new BuiltinToken(Builtin.Click, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Click, Line));
                     break;
                 case "type":
-                    toks.Add(new BuiltinToken(Builtin.Type, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Type, Line));
                     break;
                 case "mod":
-                    toks.Add(new BuiltinToken(Builtin.Mod, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Mod, Line));
                     break;
                 case "start":
-                    toks.Add(new BuiltinToken(Builtin.Start, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Start, Line));
                     break;
                 case "end":
-                    toks.Add(new BuiltinToken(Builtin.End, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.End, Line));
                     break;
                 case "int":
-                    toks.Add(new BuiltinToken(Builtin.Int, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Int, Line));
                     break;
                 case "float":
-                    toks.Add(new BuiltinToken(Builtin.Float, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Float, Line));
                     break;
                 case "delay":
-                    toks.Add(new BuiltinToken(Builtin.Delay, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Delay, Line));
                     break;
                 case "display":
-                    toks.Add(new BuiltinToken(Builtin.Display, Line));
+                    toks.Add(new BuiltinToken(Token.BuiltinType.Display, Line));
                     break;
                 default:
                     toks.Add(new IdentToken(chunk, Line));
@@ -162,13 +179,19 @@ namespace Macroc
 
         public List<Token> Lex()
         {
+            if (!Ready)
+            {
+                Logger.Error("No data bound to lexer.");
+                throw new LexerException("No data bound to lexer.");
+            }
+
             while (true)
             {
                 SkipWhitespace();
                 switch (Current)
                 {
                     case '\0':
-                        if (!IsValid) Environment.Exit((int)ExitCode.LexerError);
+                        if (!IsValid) throw new LexerException();
                         toks.Add(new EOSToken(Line));
                         return toks;
                     case '\n':
@@ -176,27 +199,27 @@ namespace Macroc
                         Line++;
                         break;
                     case '+':
-                        toks.Add(new OperatorToken(OperatorType.Add, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.Add, Line));
                         break;
                     case '-':
-                        toks.Add(new OperatorToken(OperatorType.Subtract, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.Subtract, Line));
                         break;
                     case '*':
-                        toks.Add(new OperatorToken(OperatorType.Multiply, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.Multiply, Line));
                         break;
                     case '/':
-                        toks.Add(new OperatorToken(OperatorType.Divide, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.Divide, Line));
                         break;
                     case '(':
-                        toks.Add(new OperatorToken(OperatorType.LeftParen, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.LeftParen, Line));
                         break;
                     case ')':
-                        toks.Add(new OperatorToken(OperatorType.RightParen, Line));
+                        toks.Add(new OperatorToken(Token.OperatorType.RightParen, Line));
                         break;
                     case '<':
                         if (Peek() == '-')
                         {
-                            toks.Add(new OperatorToken(OperatorType.Assign, Line));
+                            toks.Add(new OperatorToken(Token.OperatorType.Assign, Line));
                             Next();
                         }
                         break;
@@ -208,5 +231,12 @@ namespace Macroc
                 Next(true);
             }
         }
+    }
+
+    public sealed class LexerException : Exception
+    { 
+        public LexerException() { }
+        public LexerException(string message) : base(message) { }
+        public LexerException(string message, Exception innerException) : base(message, innerException) { }
     }
 }

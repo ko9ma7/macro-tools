@@ -8,7 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="test.mcc">
+    <ProjectReference Include="..\MacroCommon\MacroCommon.csproj" />
+    <ProjectReference Include="..\MacroCompiler\MacroCompiler.csproj" />
+    <ProjectReference Include="..\MacroRuntime\MacroRuntime.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="test.mcs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

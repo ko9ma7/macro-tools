@@ -1,6 +1,6 @@
-using System.ComponentModel;
+using MacroCommon;
 
-namespace Macroc
+namespace MacroCompiler
 {
     internal sealed class Parser
     {
@@ -52,13 +52,14 @@ namespace Macroc
         }
 
         public const int Version = 1;
-        private readonly List<Token> Toks;
+        private List<Token> Toks;
         private List<byte> bytes;
         private Token Current;
         private int CurPos;
         private bool IsValid;
         private int StackStackOffset;
         private int GlobalStackOffset;
+        private bool IsReady;
         private int StackOffset
         {
             get => InFunction ? StackStackOffset : GlobalStackOffset;
@@ -74,11 +75,8 @@ namespace Macroc
         private readonly Dictionary<string, VarEntry> GlobalVarTable;
         private Dictionary<string, VarEntry> VarTable { get => InFunction ? StackVarTable : GlobalVarTable; }
         private readonly Dictionary<string, int> FuncTable;
-        public Parser(List<Token> toks)
+        public Parser()
         {
-            Toks = toks;
-            bytes = new((int)(Toks.Count * 2.5f)); // Rough ratio of tokens to bytes (needs more data)
-            Current = Toks[0];
             CurPos = 0;
             IsValid = true;
             StackVarTable = new();
@@ -88,6 +86,15 @@ namespace Macroc
             GlobalStackOffset = 0;
             InFunction = false;
             InFunctionCall = false;
+            IsReady = false;
+        }
+
+        public void BindData(List<Token> toks)
+        {
+            Toks = toks;
+            bytes = new((int)(Toks.Count * 2.5f)); // Rough ratio of tokens to bytes (needs more data)
+            Current = Toks[0];
+            IsReady = true;
         }
 
         private void Error(string message)
@@ -96,7 +103,7 @@ namespace Macroc
             IsValid = false;
         }
 
-        private TokenType PeekType()
+        private Token.TokenType PeekType()
         {
             return Toks[CurPos + 1].Type;
         }
@@ -109,7 +116,7 @@ namespace Macroc
                 if (!allowEOF)
                 {
                     Error("Unexpected end of file");
-                    Environment.Exit((int)ExitCode.ParserError);
+                    throw new EndOfStreamException();
                 }
                 Current = new EOSToken(0);
                 return;
@@ -148,23 +155,23 @@ namespace Macroc
         /// <summary>
         /// Convert operator type to its matching opcode
         /// </summary>
-        private byte GetOperatorOpcode(OperatorType op)
+        private byte GetOperatorOpcode(Token.OperatorType op)
         {
             switch (op)
             {
-                case OperatorType.Add:
+                case Token.OperatorType.Add:
                 return Opcode.Add.Value();
 
-                case OperatorType.Subtract:
+                case Token.OperatorType.Subtract:
                 return Opcode.Sub.Value();
 
-                case OperatorType.Multiply:
+                case Token.OperatorType.Multiply:
                 return Opcode.Mult.Value();
 
-                case OperatorType.Divide:
+                case Token.OperatorType.Divide:
                 return Opcode.Div.Value();
 
-                case OperatorType.Assign:
+                case Token.OperatorType.Assign:
                 Error($"Generic assign is not valid (Line {Current.Line + 1})");
                 return 0xFF;
 
@@ -173,11 +180,11 @@ namespace Macroc
             }
         }
 
-        private static int GetOperatorPrecedence(OperatorType op) =>
+        private static int GetOperatorPrecedence(Token.OperatorType op) =>
             op switch
             {
-                OperatorType.Multiply or OperatorType.Divide => 3,
-                OperatorType.Add or OperatorType.Subtract => 2,
+                Token.OperatorType.Multiply or Token.OperatorType.Divide => 3,
+                Token.OperatorType.Add or Token.OperatorType.Subtract => 2,
                 _ => 0
             };
 
@@ -190,7 +197,7 @@ namespace Macroc
             }
 
             bytes.Add(Opcode.PushImm.Value());
-            int value = ((IntToken)Current).Value;
+            int value = ((IntLiteral)Current).Value;
 
             // if expression is float-typed, push float. otherwise, push int
             if (type == VarType.Int) bytes.AddRange(BitConverter.GetBytes(value));
@@ -207,7 +214,7 @@ namespace Macroc
             }
 
             bytes.Add(Opcode.PushImm.Value());
-            float value = ((FloatToken)Current).Value;
+            float value = ((FloatLiteral)Current).Value;
 
             // if expression is float-typed, push float. otherwise, push int
             if (type == VarType.Float) bytes.AddRange(BitConverter.GetBytes(value));
@@ -228,15 +235,23 @@ namespace Macroc
             IdentToken identToken = (IdentToken)Current;
             if (!AssertVarExists(identToken)) return;
 
+            if (VarTable[identToken.Ident].Type != type)
+            {
+                Logger.Error($"Var '{identToken.Ident}' has invalid type for expression");
+                IsValid = false;
+                expectOperator = true;
+                return;
+            }
+
             bytes.Add(Opcode.PushVar.Value());
             bytes.AddRange(BitConverter.GetBytes(VarTable[identToken.Ident].Offset));
 
             expectOperator = true;
         }
 
-        private void ParseExprOperator(Stack<OperatorType> operatorStack, ref bool expectOperator)
+        private void ParseExprOperator(Stack<Token.OperatorType> operatorStack, ref bool expectOperator)
         {
-            OperatorType operation = ((OperatorToken)Current).Operator;
+            Token.OperatorType operation = ((OperatorToken)Current).Operator;
             // if operator stack is empty, we must push
             if (operatorStack.Count == 0)
             {
@@ -248,7 +263,7 @@ namespace Macroc
             int currentPrec = GetOperatorPrecedence(operation);
             int prevPrec = GetOperatorPrecedence(operatorStack.Peek());
 
-            if (operation == OperatorType.LeftParen)
+            if (operation == Token.OperatorType.LeftParen)
             {
                 // Left paren must take place of value
                 if (expectOperator)
@@ -261,7 +276,7 @@ namespace Macroc
                 return;
             }
 
-            if (operation == OperatorType.RightParen)
+            if (operation == Token.OperatorType.RightParen)
             {
                 // Right paren must take place of operator
                 if (!expectOperator)
@@ -271,9 +286,9 @@ namespace Macroc
                 }
                 
                 // loop until we find a left parenthesis
-                while (operatorStack.Peek() != OperatorType.LeftParen)
+                while (operatorStack.Peek() != Token.OperatorType.LeftParen)
                 {
-                    OperatorType op = operatorStack.Pop();
+                    Token.OperatorType op = operatorStack.Pop();
                     bytes.Add(GetOperatorOpcode(op));
 
                     // if stack is empty, then we haven't found a matching parenthesis
@@ -294,7 +309,7 @@ namespace Macroc
             // is precedences are less-than or equal, pop previous and push current
             if (currentPrec <= prevPrec)
             {
-                OperatorType op = operatorStack.Pop();
+                Token.OperatorType op = operatorStack.Pop();
                 bytes.Add(GetOperatorOpcode(op));
                 operatorStack.Push(operation);
                 return;
@@ -310,14 +325,14 @@ namespace Macroc
 
         private void ParseExpression(VarType type)
         {
-            Stack<OperatorType> operatorStack = new();
+            Stack<Token.OperatorType> operatorStack = new();
             bool expectOperator = false;
 
             Next();
 
-            while (Current.Type != TokenType.ENDL && Current.Type != TokenType.EOS)
+            while (Current.Type != Token.TokenType.ENDL && Current.Type != Token.TokenType.EOS)
             {
-                if (expectOperator && Current.Type != TokenType.Operator)
+                if (expectOperator && Current.Type != Token.TokenType.Operator)
                 {
                     if (InFunctionCall)
                     {
@@ -330,19 +345,19 @@ namespace Macroc
 
                 switch (Current.Type)
                 {
-                    case TokenType.Int:
+                    case Token.TokenType.Int:
                         ParseExprIntLit(type, ref expectOperator);
                         break;
 
-                    case TokenType.Float:
+                    case Token.TokenType.Float:
                         ParseExprFloatLit(type, ref expectOperator);
                         break;
 
-                    case TokenType.Ident:
+                    case Token.TokenType.Ident:
                         ParseExprIdent(type, ref expectOperator);
                         break;
 
-                    case TokenType.Operator:
+                    case Token.TokenType.Operator:
                         ParseExprOperator(operatorStack, ref expectOperator);
                         break;
 
@@ -371,7 +386,7 @@ namespace Macroc
         /// <summary>
         private void ParseIdent()
         {
-            if (PeekType() == TokenType.Operator)
+            if (PeekType() == Token.TokenType.Operator)
             {
                 // Must be an assignment
                 // Store the asignee
@@ -380,7 +395,7 @@ namespace Macroc
                 Next();
 
                 // Make sure we are assigning
-                if (((OperatorToken)Current).Operator != OperatorType.Assign)
+                if (((OperatorToken)Current).Operator != Token.OperatorType.Assign)
                 {
                     Error($"Expected assignment operator (Line {Current.Line + 1}) ");
                     return;
@@ -413,7 +428,7 @@ namespace Macroc
         {
             switch (((BuiltinToken)Current).Builtin)
             {
-                case Builtin.Start:
+                case Token.BuiltinType.Start:
                 {
                     // Do not allow function definition inside of a function
                     if (InFunction)
@@ -423,7 +438,7 @@ namespace Macroc
                     }
 
                     // Validate token types
-                    if (PeekType() != TokenType.Ident)
+                    if (PeekType() != Token.TokenType.Ident)
                     {
                         Error($"Expected ident (Line {Current.Line + 1}");
                         break;
@@ -443,7 +458,7 @@ namespace Macroc
                     break;
                 }
 
-                case Builtin.End:
+                case Token.BuiltinType.End:
                     // Only allow end at end of function
                     if (!InFunction)
                     {
@@ -455,11 +470,11 @@ namespace Macroc
                     bytes.Add(Opcode.EndFunc.Value());
                     break;
 
-                case Builtin.Int:
+                case Token.BuiltinType.Int:
                 {
                     // Must be a variable definition
                     // Validate token types
-                    if (PeekType() != TokenType.Ident)
+                    if (PeekType() != Token.TokenType.Ident)
                     {
                         Error($"Expected ident (Line {Current.Line + 1}");
                         break;
@@ -476,11 +491,11 @@ namespace Macroc
                     break;
                 }
 
-                case Builtin.Float:
+                case Token.BuiltinType.Float:
                 {
                     // Must be a variable definition
                     // Validate token types
-                    if (PeekType() != TokenType.Ident)
+                    if (PeekType() != Token.TokenType.Ident)
                     {
                         Error($"Expected ident (Line {Current.Line + 1}");
                         break;
@@ -494,11 +509,11 @@ namespace Macroc
                     break;
                 }
 
-                case Builtin.Display:
+                case Token.BuiltinType.Display:
                 {
                     // Must be a variable next
                     // Validate token types
-                    if (PeekType() != TokenType.Ident)
+                    if (PeekType() != Token.TokenType.Ident)
                     {
                         Error($"Expected ident (Line {Current.Line + 1}");
                         break;
@@ -515,7 +530,7 @@ namespace Macroc
                     break;
                 }
 
-                case Builtin.Move:
+                case Token.BuiltinType.Move:
                 {
                     InFunctionCall = true;
                     bytes.Add(Opcode.IntOperation.Value());
@@ -527,7 +542,7 @@ namespace Macroc
                     break;
                 }
 
-                case Builtin.Delay:
+                case Token.BuiltinType.Delay:
                 {
                     InFunctionCall = true;
                     bytes.Add(Opcode.FloatOperation.Value());
@@ -559,6 +574,11 @@ namespace Macroc
         ///</summary>
         public List<byte> Parse()
         {
+            if (!IsReady)
+            {
+                Logger.Error("No data bound to parser...");
+                throw new ParserException("No dat abound to parser.");
+            }
             bytes.AddRange(BitConverter.GetBytes(Version));
             bytes.AddRange(new List<byte>() {Opcode.SetupFrame.Value(), 0, 0, 0, 0});
 
@@ -566,21 +586,21 @@ namespace Macroc
             {
                 switch (Current.Type)
                 {
-                    case TokenType.EOS:
-                        if (!IsValid) Environment.Exit((int)ExitCode.ParserError);
+                    case Token.TokenType.EOS:
+                        if (!IsValid) throw new ParserException();
                         bytes.Add(Opcode.Halt.Value());
                         WriteGlobalStackOffset();
                         return bytes;
 
-                    case TokenType.Ident:
+                    case Token.TokenType.Ident:
                         ParseIdent();
                         break;
 
-                    case TokenType.Builtin:
+                    case Token.TokenType.Builtin:
                         ParseBuiltin();
                         break;
 
-                    case TokenType.ENDL:
+                    case Token.TokenType.ENDL:
                         InFunctionCall = false;
                         break;
 
@@ -592,6 +612,13 @@ namespace Macroc
                 Next(true);
             }
         }
+    }
+
+    public sealed class ParserException : Exception
+    {
+        public ParserException() { }
+        public ParserException(string message) : base(message) { }
+        public ParserException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     static class EnumByteExt

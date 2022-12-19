@@ -1,35 +1,46 @@
-using System.ComponentModel.DataAnnotations;
+using MacroCommon;
 
-namespace Macror
+namespace MacroRuntime
 {
-    internal sealed class Runtime
+    public sealed class Runtime
     {
         public const int Version = 1;
-        private readonly byte[] Program;
         private readonly byte[] Memory;
         private readonly Stack Stack;
         private OperationMode Mode;
         private int InstructionPointer;
         private bool Running;
+        /// <summary>
+        /// Constructs a new runtime bound to the given program with the given memory size
+        /// </summary>
+        /// <param name="program">The program to bind to</param>
+        /// <param name="memorySize">The amount of memory to allocate in kilobytes</param>
         public Runtime(ref byte[] program, int memorySize)
         {
-            Program = program;
-            if (Program.Length < 4)
+            if (program.Length < 4)
             {
                 Logger.Error($"Invalid Program...");
-                Environment.Exit((int)ExitCode.RuntimeError);   
+                throw new RuntimeException("invalid program");
             }
-            Memory = new byte[memorySize];
-            Stack = new(ref Memory);
-            InstructionPointer = 4;         /* Skip the version bytes */
-            Running = true;
 
-            int progVersion = BitConverter.ToInt32(Program, 0);
+            int progVersion = BitConverter.ToInt32(program, 0);
             if (Version != progVersion)
             {
                 Logger.Error($"Parser version is {Version} but bytecode version is {progVersion}...");
-                Environment.Exit((int)ExitCode.RuntimeError);   
+                throw new RuntimeException("Invalid bytecode version");
             }
+
+            if (memorySize * 1024 < program.Length)
+            {
+                Logger.Error("Program does not fit in memory");
+                throw new RuntimeException("Program does not fit in memory");
+            }
+
+            Memory = new byte[memorySize * 1024];
+            Array.Copy(program, Memory, program.Length);
+            Stack = new(ref Memory);
+            InstructionPointer = 0;
+            Running = true;
         }
 
         private string BytesToFriendly(byte[] bytes)
@@ -39,7 +50,7 @@ namespace Macror
 
         private int GetIntFromPrgm()
         {
-            int address = BitConverter.ToInt32(Program, InstructionPointer);
+            int address = BitConverter.ToInt32(Memory, InstructionPointer);
             InstructionPointer += 3;
             return address;
         }
@@ -47,7 +58,7 @@ namespace Macror
         private byte[] GetBytesFromPrgm()
         {
             byte[] bytes = new byte[4];
-            Array.Copy(Program, InstructionPointer, bytes, 0, 4);
+            Array.Copy(Memory, InstructionPointer, bytes, 0, 4);
             InstructionPointer += 3;
             return bytes;
         }
@@ -60,14 +71,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left + right);
-                Logger.Verbose($"Add | {left}+{right}");
+                Logger.VerboseLog($"Add | {left}+{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left + right);
-                Logger.Verbose($"Add | {left}+{right}");
+                Logger.VerboseLog($"Add | {left}+{right}");
             }
             Stack.Push(bytes);
         }
@@ -80,14 +91,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left - right);
-                Logger.Verbose($"Subtract | {left}-{right}");
+                Logger.VerboseLog($"Subtract | {left}-{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left - right);
-                Logger.Verbose($"Subtract | {left}-{right}");
+                Logger.VerboseLog($"Subtract | {left}-{right}");
             }
             Stack.Push(bytes);
         }
@@ -100,14 +111,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left * right);
-                Logger.Verbose($"Multiply | {left}*{right}");
+                Logger.VerboseLog($"Multiply | {left}*{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left * right);
-                Logger.Verbose($"Multiply | {left}*{right}");
+                Logger.VerboseLog($"Multiply | {left}*{right}");
             }
             Stack.Push(bytes);
         }
@@ -120,14 +131,14 @@ namespace Macror
                 int right = Stack.PopInt();
                 int left = Stack.PopInt();
                 bytes = BitConverter.GetBytes(left / right);
-                Logger.Verbose($"Divide | {left}/{right}");
+                Logger.VerboseLog($"Divide | {left}/{right}");
             }
             else
             {
                 float right = Stack.PopFloat();
                 float left = Stack.PopFloat();
                 bytes = BitConverter.GetBytes(left / right);
-                Logger.Verbose($"Divide | {left}/{right}");
+                Logger.VerboseLog($"Divide | {left}/{right}");
             }
             Stack.Push(bytes);
         }
@@ -137,7 +148,7 @@ namespace Macror
             ++InstructionPointer;
             byte[] val = GetBytesFromPrgm();
             Stack.Push(val);
-            Logger.Verbose($"PushImm | Value: {BytesToFriendly(val)}");
+            Logger.VerboseLog($"PushImm | Value: {BytesToFriendly(val)}");
         }
         private void PushVar()
         {
@@ -145,7 +156,7 @@ namespace Macror
             int address = GetIntFromPrgm();
             byte[] val = Stack.ReadOffsetBytes(address);
             Stack.Push(val);
-            Logger.Verbose($"PushVar | Value: {BytesToFriendly(val)} | address: {address}");
+            Logger.VerboseLog($"PushVar | Value: {BytesToFriendly(val)} | address: {address}");
         }
 
         private void StoreVariable()
@@ -154,7 +165,7 @@ namespace Macror
             int address = GetIntFromPrgm();
             byte[] bytes = Stack.PopBytes();
             Stack.WriteToOffset(bytes, address);
-            Logger.Verbose($"StoreVar | Value: {BytesToFriendly(bytes)} | address: {address}");
+            Logger.VerboseLog($"StoreVar | Value: {BytesToFriendly(bytes)} | address: {address}");
         }
 
         private void SetupFrame()
@@ -162,7 +173,7 @@ namespace Macror
             ++InstructionPointer;
             int size = GetIntFromPrgm();
             Stack.SetupFrame(size);
-            Logger.Verbose($"SetupFrame | size: {size}");
+            Logger.VerboseLog($"SetupFrame | size: {size}");
         }
 
         private void Display()
@@ -187,14 +198,14 @@ namespace Macror
         {
             int y = Stack.PopInt();
             int x = Stack.PopInt();
-            Logger.Verbose($"Move | x: {x} | y: {y}");
+            Logger.VerboseLog($"Move | x: {x} | y: {y}");
             // Move here
         }
 
         private void Delay()
         {
             float timeInSeconds = Stack.PopFloat();
-            Logger.Verbose($"Delay | time: {timeInSeconds}");
+            Logger.VerboseLog($"Delay | time: {timeInSeconds}");
             Thread.Sleep((int)(timeInSeconds * 1000));
         }
 
@@ -202,7 +213,7 @@ namespace Macror
         {
             while (Running)
             {
-                Opcode opcode = (Opcode)Program[InstructionPointer];
+                Opcode opcode = (Opcode)Memory[InstructionPointer];
                 switch (opcode)
                 {
                     case Opcode.Halt:
@@ -297,6 +308,13 @@ namespace Macror
         {
             Int = 0x00,
             Float
+        }
+
+        public sealed class RuntimeException : Exception
+        {
+            public RuntimeException() { }
+            public RuntimeException(string message) : base(message) { }
+            public RuntimeException(string message, Exception innerException) : base(message, innerException) { }
         }
     }
 }

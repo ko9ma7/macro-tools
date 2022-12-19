@@ -1,4 +1,4 @@
-namespace Macror
+namespace MacroRuntime
 {
     internal sealed class Stack
     {
